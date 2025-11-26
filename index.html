@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      /* --- 既存のスタイル --- */
+      body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; color: #333; height: 100vh; box-sizing: border-box; }
+      .container { width: 98%; height: 95vh; margin: 10px auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; box-sizing: border-box; position: relative; }
+      
+      /* タイトル周りの調整 */
+      .title-bar { display: flex; justify-content: center; align-items: center; position: relative; flex: 0 0 auto; margin-bottom: 20px; }
+      h1 { margin: 0; font-size: 1.5rem; color: #2c3e50; }
+      
+      /* 設定ボタン */
+      .settings-btn {
+        position: absolute; right: 0; top: 0;
+        background: transparent; border: 1px solid #ccc; color: #666;
+        padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 14px;
+      }
+      .settings-btn:hover { background: #eee; }
+
+      /* --- 入力・結果エリア (既存) --- */
+      #input-screen { flex: 0 0 auto; width: 100%; max-width: 600px; margin: 0 auto; }
+      .form-group { margin-bottom: 15px; }
+      label { display: block; margin-bottom: 5px; font-weight: bold; }
+      input[type="text"], input[type="number"], select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
+      #manual-input-area { display: none; margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px; border: 1px solid #eee; }
+      .btn { display: inline-block; background-color: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 10px; font-weight: bold; }
+      .btn:hover { background-color: #45a049; }
+      #result-screen { display: none; flex: 1; flex-direction: column; min-height: 0; width: 100%; }
+      .header-area { flex: 0 0 auto; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+      .btn-back { background-color: #666; width: auto; padding: 8px 20px; color: white; border-radius: 4px; font-size: 14px; border: none; cursor: pointer; }
+      .row-count { font-weight: bold; color: #555; }
+      .table-wrapper { flex: 1; overflow: auto; border: 1px solid #ddd; position: relative; }
+      table { width: 100%; border-collapse: separate; border-spacing: 0; }
+      th, td { padding: 8px 10px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; text-align: left; white-space: nowrap; font-size: 14px; }
+      thead th { background-color: #f1f8ff; position: sticky; z-index: 10; box-shadow: 0 1px 0 #bbb; }
+      .filter-input { width: 100%; padding: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; margin-top: 2px; }
+      tr.header-title-row th { background-color: #e3f2fd; border-bottom: none; padding-bottom: 4px; }
+      tr.header-filter-row th { background-color: #e3f2fd; padding-top: 0; padding-bottom: 8px; font-weight: normal; }
+      tbody tr:nth-child(even) { background-color: #f9f9f9; }
+      tbody tr:hover { background-color: #eef5ea; transition: 0.2s; }
+      #loading { display: none; text-align: center; padding: 50px; font-weight: bold; color: #666; font-size: 1.2rem;}
+      #error-msg { color: red; margin-top: 10px; text-align: center; display: none; }
+
+      /* --- ▼▼▼ 新規登録モーダル ▼▼▼ */
+      .modal-overlay {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center;
+      }
+      .modal-content {
+        background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 500px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      }
+      .modal-header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+      .modal-title { font-size: 1.2rem; font-weight: bold; }
+      .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; line-height: 1; }
+      .modal-footer { margin-top: 20px; text-align: right; }
+      .btn-cancel { background-color: #999; margin-right: 10px; width: auto; }
+      .btn-save { background-color: #2196F3; width: auto; }
+      .btn-save:hover { background-color: #0b7dda; }
+    </style>
+  </head>
+  <body>
+
+    <div class="container">
+      <div class="title-bar">
+        <h1>My スプレッドシート Viewer</h1>
+        <button class="settings-btn" onclick="openModal()">⚙️ 新規登録</button>
+      </div>
+
+      <div id="input-screen">
+        <div class="form-group">
+          <label for="sheet-select">表示するデータを選択してください</label>
+          <select id="sheet-select" onchange="onSelectChange()">
+            <option value="">読み込み中...</option>
+          </select>
+        </div>
+
+        <div id="manual-input-area">
+          <div class="form-group">
+            <label>URL</label>
+            <input type="text" id="manual-url">
+          </div>
+          <div class="form-group">
+            <label>シート名</label>
+            <input type="text" id="manual-sheet-name">
+          </div>
+          <div class="form-group">
+            <label>表示する列（A, B... 空欄で全列）</label>
+            <input type="text" id="manual-visible-columns">
+          </div>
+          <div class="form-group">
+            <label>見出し行数</label>
+            <input type="number" id="manual-header-rows" value="1" min="0">
+          </div>
+        </div>
+
+        <button class="btn" onclick="loadData()">データを表示する</button>
+        <div id="error-msg"></div>
+      </div>
+
+      <div id="loading">データ取得中...</div>
+
+      <div id="result-screen">
+        <div class="header-area">
+          <button class="btn-back" onclick="goBack()">← 条件変更</button>
+          <span class="row-count" id="row-count-display"></span>
+        </div>
+        <div class="table-wrapper">
+          <table id="data-table"></table>
+        </div>
+      </div>
+    </div>
+
+    <div id="register-modal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title">新しい設定を登録</div>
+          <button class="close-btn" onclick="closeModal()">×</button>
+        </div>
+        
+        <form id="reg-form" onsubmit="event.preventDefault(); saveSetting();">
+          <div class="form-group">
+            <label>表示名（メニューに出る名前）</label>
+            <input type="text" id="reg-name" required placeholder="例: 売上表 5月">
+          </div>
+          <div class="form-group">
+            <label>スプレッドシートURL</label>
+            <input type="text" id="reg-url" required placeholder="https://docs...">
+          </div>
+          <div class="form-group">
+            <label>シート名</label>
+            <input type="text" id="reg-sheet" required placeholder="シート1">
+          </div>
+          <div class="form-group" style="display:flex; gap:10px;">
+            <div style="flex:1;">
+              <label>見出し行数</label>
+              <input type="number" id="reg-rows" value="1" min="0">
+            </div>
+            <div style="flex:2;">
+              <label>表示列 (A,B..)</label>
+              <input type="text" id="reg-cols" placeholder="空欄で全列">
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" onclick="closeModal()">キャンセル</button>
+            <button type="submit" class="btn btn-save" id="btn-save-submit">保存する</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let loadedSettings = [];
+      let currentTableData = [];
+
+      window.onload = function() {
+        fetchList();
+      };
+
+      function fetchList() {
+        google.script.run
+          .withSuccessHandler(initDropdown)
+          .withFailureHandler(onFailure)
+          .getSheetList();
+      }
+
+      function initDropdown(list) {
+        loadedSettings = list;
+        const select = document.getElementById('sheet-select');
+        // 現在の選択値を保持（リロード用）
+        const currentVal = select.value;
+        
+        select.innerHTML = '<option value="">-- 選択してください --</option>';
+        list.forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.index;
+          option.textContent = item.name;
+          select.appendChild(option);
+        });
+        const manualOption = document.createElement('option');
+        manualOption.value = 'manual';
+        manualOption.textContent = 'その他（手動入力）';
+        select.appendChild(manualOption);
+
+        if (currentVal) select.value = currentVal;
+      }
+
+      // --- モーダル制御 ---
+      function openModal() {
+        document.getElementById('register-modal').style.display = 'flex';
+      }
+      function closeModal() {
+        document.getElementById('register-modal').style.display = 'none';
+        document.getElementById('reg-form').reset();
+      }
+      
+      // --- 設定保存処理 ---
+      function saveSetting() {
+        const btn = document.getElementById('btn-save-submit');
+        btn.textContent = '保存中...';
+        btn.disabled = true;
+
+        const formData = {
+          name: document.getElementById('reg-name').value,
+          url: document.getElementById('reg-url').value,
+          sheetName: document.getElementById('reg-sheet').value,
+          headerRows: document.getElementById('reg-rows').value,
+          visibleColumns: document.getElementById('reg-cols').value
+        };
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            btn.textContent = '保存する';
+            btn.disabled = false;
+            if (res.success) {
+              alert('登録しました！');
+              closeModal();
+              fetchList(); // リストを再読み込み
+            } else {
+              alert('エラー: ' + res.message);
+            }
+          })
+          .withFailureHandler(function(e) {
+            btn.textContent = '保存する';
+            btn.disabled = false;
+            alert('システムエラー: ' + e.message);
+          })
+          .addSetting(formData);
+      }
+
+      // --- 既存ロジック ---
+      function onSelectChange() {
+        const val = document.getElementById('sheet-select').value;
+        document.getElementById('manual-input-area').style.display = (val === 'manual') ? 'block' : 'none';
+      }
+
+      function loadData() {
+        const val = document.getElementById('sheet-select').value;
+        if (!val && val !== 0) { showError('選択してください。'); return; }
+
+        const request = {};
+        let headerRows = 1;
+
+        if (val === 'manual') {
+          const url = document.getElementById('manual-url').value.trim();
+          const name = document.getElementById('manual-sheet-name').value.trim();
+          const rows = document.getElementById('manual-header-rows').value;
+          const colsStr = document.getElementById('manual-visible-columns').value.trim();
+          if(!url || !name) { showError('URLとシート名を入力してください'); return; }
+          request.type = 'manual';
+          request.url = url;
+          request.sheetName = name;
+          request.visibleColumns = colsStr ? colsStr.replace(/，/g, ',').split(',').map(s => s.trim()) : [];
+          headerRows = parseInt(rows, 10) || 1;
+        } else {
+          const index = parseInt(val, 10);
+          request.type = 'preset';
+          request.index = index;
+          headerRows = loadedSettings[index].headerRows;
+        }
+
+        document.getElementById('input-screen').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('error-msg').style.display = 'none';
+
+        google.script.run
+          .withSuccessHandler((res) => onSuccess(res, headerRows))
+          .withFailureHandler(onFailure)
+          .getSheetData(request);
+      }
+
+      function onSuccess(res, headerRows) {
+        document.getElementById('loading').style.display = 'none';
+        if (res.success) {
+          renderTable(res.data, headerRows);
+          document.getElementById('result-screen').style.display = 'flex';
+        } else {
+          document.getElementById('input-screen').style.display = 'block';
+          showError(res.message);
+        }
+      }
+      function onFailure(e) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('input-screen').style.display = 'block';
+        showError('エラー: ' + e.message);
+      }
+      
+      // テーブル描画・フィルターは前回と同じ
+      function renderTable(data, headerCount) {
+        const table = document.getElementById('data-table');
+        table.innerHTML = '';
+        currentTableData = data;
+        updateRowCount(data.length - headerCount, data.length - headerCount);
+        const actualHeaderCount = Math.min(headerCount, data.length);
+        const headers = data.slice(0, actualHeaderCount);
+        const body = data.slice(actualHeaderCount);
+        const thead = document.createElement('thead');
+        headers.forEach((row) => {
+          const tr = document.createElement('tr');
+          tr.className = 'header-title-row';
+          row.forEach(cell => {
+            const th = document.createElement('th');
+            th.textContent = cell;
+            tr.appendChild(th);
+          });
+          thead.appendChild(tr);
+        });
+        const filterRow = document.createElement('tr');
+        filterRow.className = 'header-filter-row';
+        const colCount = headers.length > 0 ? headers[0].length : 0;
+        for (let i = 0; i < colCount; i++) {
+          const th = document.createElement('th');
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'filter-input';
+          input.placeholder = '検索...';
+          input.setAttribute('data-col-index', i);
+          input.oninput = applyFilter;
+          th.appendChild(input);
+          filterRow.appendChild(th);
+        }
+        thead.appendChild(filterRow);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        tbody.id = 'table-body';
+        body.forEach(row => {
+          const tr = document.createElement('tr');
+          row.forEach(cell => {
+            const td = document.createElement('td');
+            td.textContent = cell;
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        setTimeout(() => {
+          const rows = thead.querySelectorAll('tr');
+          let currentTop = 0;
+          rows.forEach(row => {
+            const cells = row.querySelectorAll('th');
+            const height = row.getBoundingClientRect().height;
+            cells.forEach(cell => { cell.style.top = currentTop + 'px'; });
+            currentTop += height;
+          });
+        }, 0);
+      }
+      function applyFilter() {
+        const inputs = document.querySelectorAll('.filter-input');
+        const rows = document.getElementById('table-body').getElementsByTagName('tr');
+        const filters = [];
+        inputs.forEach(input => {
+          const val = input.value.toLowerCase().trim();
+          if (val) filters.push({ index: parseInt(input.getAttribute('data-col-index')), value: val });
+        });
+        let visibleCount = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const cells = row.getElementsByTagName('td');
+          let isMatch = true;
+          for (let f = 0; f < filters.length; f++) {
+            if (cells[filters[f].index].textContent.toLowerCase().indexOf(filters[f].value) === -1) { isMatch = false; break; }
+          }
+          if (isMatch) { row.style.display = ''; visibleCount++; } else { row.style.display = 'none'; }
+        }
+        updateRowCount(visibleCount, rows.length);
+      }
+      function updateRowCount(visible, total) { document.getElementById('row-count-display').textContent = `表示: ${visible} / 全件: ${total}`; }
+      function goBack() { document.getElementById('result-screen').style.display = 'none'; document.getElementById('input-screen').style.display = 'block'; document.getElementById('data-table').innerHTML = ''; }
+      function showError(msg) { const el = document.getElementById('error-msg'); el.textContent = msg; el.style.display = 'block'; }
+    </script>
+  </body>
+</html>
